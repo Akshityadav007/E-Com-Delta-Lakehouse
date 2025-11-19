@@ -1,0 +1,38 @@
+name: Deploy Databricks Workflows
+
+on:
+  push:
+    branches:
+      - dev
+      - uat
+      - prod
+  pull_request:
+    branches:
+      - dev
+      - uat
+      - prod
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: ${{ github.ref_name }}
+      url: https://<workspace-url>
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install deps
+        run: |
+          pip install databricks-cli requests
+
+      - name: Deploy workflows
+        run: |
+          python deploy.py "${{ secrets.DATABRICKS_HOST }}" "${{ secrets.DATABRICKS_TOKEN }}"
