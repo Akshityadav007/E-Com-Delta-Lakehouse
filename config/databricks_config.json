@@ -1,11 +1,5 @@
 {
   "workflows": [
-      {
-      "name": "testNotebook",
-      "notebook": "notebooks/silver/testNotebook",
-      "cluster": "standard_small",
-      "update": true
-    },
     {
       "name": "ecommerce_ingest_bronze",
       "notebook": "notebooks/bronze/ingest_orders",
