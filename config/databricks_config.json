@@ -1,0 +1,22 @@
+{
+  "workflows": [
+    {
+      "name": "ecommerce_ingest_bronze",
+      "notebook": "notebooks/bronze/ingest_orders",
+      "cluster": "standard_small",
+      "update": true
+    },
+    {
+      "name": "ecommerce_silver_transform",
+      "notebook": "notebooks/silver/transform_orders",
+      "cluster": "standard_small",
+      "update": true
+    },
+    {
+      "name": "ecommerce_gold_aggregations",
+      "notebook": "notebooks/gold/aggregate_orders",
+      "cluster": "standard_medium",
+      "update": false
+    }
+  ]
+}
