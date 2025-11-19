@@ -35,4 +35,4 @@ jobs:
 
       - name: Deploy workflows
         run: |
-          python deploy.py "${{ secrets.DATABRICKS_HOST }}" "${{ secrets.DATABRICKS_TOKEN }}"
+          python ci-cd/deploy.py "${{ secrets.DATABRICKS_HOST }}" "${{ secrets.DATABRICKS_TOKEN }}"
