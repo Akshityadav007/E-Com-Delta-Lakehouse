@@ -18,14 +18,12 @@ jobs:
     runs-on: ubuntu-latest
 
     # Use real environment (dev/uat/prod), not branch name
-    environment:
-      environment: ${{ 
-          startsWith(github.ref_name, 'feature/') && 'dev' ||
-          github.ref_name == 'dev' && 'uat' ||
-          github.ref_name == 'uat' && 'prod' ||
-          github.ref_name == 'prod' && 'prod'
-      }}
-
+    environment: ${{ 
+        startsWith(github.ref_name, 'feature/') && 'dev' ||
+        github.ref_name == 'dev' && 'uat' ||
+        github.ref_name == 'uat' && 'prod' ||
+        github.ref_name == 'prod' && 'prod'
+    }}
 
     steps:
       - name: Checkout code
