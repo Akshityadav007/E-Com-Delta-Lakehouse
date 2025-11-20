@@ -3,11 +3,16 @@ import sys
 from databricks_cli.sdk.api_client import ApiClient
 from databricks_cli.jobs.api import JobsApi
 
+
 def load_config():
     with open("config/databricks_config.json") as f:
         return json.load(f)
 
+
 def build_job_definition(wf):
+    """
+    Build job payload (same for create and reset)
+    """
     return {
         "name": wf["name"],
         "tasks": [
@@ -29,24 +34,36 @@ def build_job_definition(wf):
         ]
     }
 
+
 def deploy(api_client, workflows):
     jobs_api = JobsApi(api_client)
-    existing = {j["settings"]["name"]: j for j in jobs_api.list_jobs().get("jobs", [])}
+
+    existing_jobs = {
+        job["settings"]["name"]: job
+        for job in jobs_api.list_jobs().get("jobs", [])
+    }
 
     for wf in workflows:
         name = wf["name"]
         update = wf.get("update", True)
-        job_payload = build_job_definition(wf)
+        payload = build_job_definition(wf)
 
-        if name in existing:
-            if update:
-                jobs_api.reset_job(existing[name]["job_id"], job_payload)
-                print(f"[UPDATED] {name}")
-            else:
-                print(f"[SKIPPED] {name}")
-        else:
-            jobs_api.create_job(job_payload)
+        # CREATE
+        if name not in existing_jobs:
+            jobs_api.create_job(payload)
             print(f"[CREATED] {name}")
+            continue
+
+        # UPDATE
+        if update:
+            jobs_api.reset_job(
+                existing_jobs[name]["job_id"],
+                {"new_settings": payload}  
+            )
+            print(f"[UPDATED] {name}")
+        else:
+            print(f"[SKIPPED] {name}")
+
 
 if __name__ == "__main__":
     config = load_config()
