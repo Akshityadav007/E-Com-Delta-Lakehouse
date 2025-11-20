@@ -19,7 +19,13 @@ jobs:
 
     # Use real environment (dev/uat/prod), not branch name
     environment:
-      name: ${{ inputs.target_env || github.ref_name }}
+      environment: ${{ 
+          startsWith(github.ref_name, 'feature/') && 'dev' ||
+          github.ref_name == 'dev' && 'uat' ||
+          github.ref_name == 'uat' && 'prod' ||
+          github.ref_name == 'prod' && 'prod'
+      }}
+
 
     steps:
       - name: Checkout code
