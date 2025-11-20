@@ -1,6 +1,13 @@
 {
   "workflows": [
     {
+      "name": "testNotebook",
+      "notebook": "notebooks/bronze/testNotebook",
+      "node_type": "m5d.large",
+      "workers": 1,
+      "update": true
+    },
+    {
       "name": "ecommerce_ingest_bronze",
       "notebook": "notebooks/bronze/ingest_orders",
       "node_type": "m5d.large",
