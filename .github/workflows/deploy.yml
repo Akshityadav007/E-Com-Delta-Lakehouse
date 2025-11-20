@@ -8,9 +8,6 @@ on:
       - uat
       - prod
   pull_request:
-    types:
-      - opened
-      - reopened
     branches:
       - dev
       - uat
@@ -20,63 +17,48 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    # Environment protection gates (dev / uat / prod)
+    # Use real environment (dev/uat/prod), not branch name
     environment:
-      name: ${{ github.ref_name }}
+      name: ${{ inputs.target_env || github.ref_name }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Detect branch
-        id: detectbranch
-        run: |
-          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
-          echo "Branch detected: ${GITHUB_REF##*/}"
-
-      ###########################################################
-      # Skip Deployment on Pull Requests (NO SECRETS AVAILABLE)
-      ###########################################################
-      - name: Skip deploy on PR
+      # Skip deploy on PR (secrets not available)
+      - name: Skip on PR
         if: ${{ github.event_name == 'pull_request' }}
         run: |
-          echo "Pull Request detected → skipping deployment."
+          echo "PR build → skipping deployment."
           exit 0
 
-      ###################################
-      # Set up Python on push events
-      ###################################
+      - name: Set target environment
+        id: setenv
+        run: |
+          BRANCH="${GITHUB_REF##*/}"
+          if [[ "$BRANCH" == feature/* ]]; then ENV="dev"; fi
+          if [[ "$BRANCH" == dev ]]; then ENV="uat"; fi
+          if [[ "$BRANCH" == uat ]]; then ENV="prod"; fi
+          if [[ "$BRANCH" == prod ]]; then
+            echo "Prod cannot deploy forward."
+            exit 1
+          fi
+
+          echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
+          echo "Selected environment: $ENV"
+
       - name: Set up Python
-        if: ${{ github.event_name == 'push' }}
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
-      - name: Install dependencies
-        if: ${{ github.event_name == 'push' }}
+      - name: Install deps
         run: |
           pip install databricks-cli requests
 
-      #########################################################
-      # Hard Fail if Secrets Missing (for safety)
-      #########################################################
-      - name: Validate Secrets
-        if: ${{ github.event_name == 'push' }}
-        run: |
-          if [ -z "${{ secrets.DATABRICKS_HOST }}" ] || [ -z "${{ secrets.DATABRICKS_TOKEN }}" ]; then
-            echo "ERROR: Missing Databricks secrets!"
-            exit 1
-          fi
-
-      #########################################################
-      # Deployment
-      #########################################################
-      - name: Deploy to Databricks Workspace
-        if: ${{ github.event_name == 'push' }}
+      - name: Deploy
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         run: |
-          echo "Deploying to ${{ env.BRANCH }} workspace..."
           python ci-cd/deploy.py "$DATABRICKS_HOST" "$DATABRICKS_TOKEN"
-          echo "Deployment to ${{ env.BRANCH }} workspace completed."
