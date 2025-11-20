@@ -1,29 +1,31 @@
 {
+  "base_path": "/Workspace/Repos/akshit-projects@outlook.com/E-Com-Delta-Lakehouse/notebooks",
+
   "workflows": [
     {
       "name": "testNotebook",
-      "notebook": "/notebooks/bronze/testNotebook",
+      "notebook": "bronze/testNotebook",
       "node_type": "Standard_DS3_v2",
       "workers": 1,
       "update": true
     },
     {
       "name": "ecommerce_ingest_bronze",
-      "notebook": "/notebooks/bronze/ingest_orders",
+      "notebook": "bronze/ingest_orders",
       "node_type": "Standard_DS3_v2",
       "workers": 1,
       "update": true
     },
     {
       "name": "ecommerce_silver_transform",
-      "notebook": "/notebooks/silver/transform_orders",
+      "notebook": "silver/transform_orders",
       "node_type": "Standard_DS3_v2",
       "workers": 1,
       "update": true
     },
     {
       "name": "ecommerce_gold_aggregations",
-      "notebook": "/notebooks/gold/aggregate_orders",
+      "notebook": "gold/aggregate_orders",
       "node_type": "Standard_DS3_v2",
       "workers": 1,
       "update": false
