@@ -5,28 +5,28 @@
     {
       "name": "testNotebook",
       "notebook": "bronze/testNotebook",
-      "node_type": "Standard_DS3_v2",
+      "node_type": "Standard_F4s_v2",
       "workers": 1,
       "update": true
     },
     {
       "name": "ecommerce_ingest_bronze",
       "notebook": "bronze/ingest_orders",
-      "node_type": "Standard_DS3_v2",
+      "node_type": "Standard_F4s_v2",
       "workers": 1,
       "update": true
     },
     {
       "name": "ecommerce_silver_transform",
       "notebook": "silver/transform_orders",
-      "node_type": "Standard_DS3_v2",
+      "node_type": "Standard_F4s_v2",
       "workers": 1,
       "update": true
     },
     {
       "name": "ecommerce_gold_aggregations",
       "notebook": "gold/aggregate_orders",
-      "node_type": "Standard_DS3_v2",
+      "node_type": "Standard_F4s_v2",
       "workers": 1,
       "update": false
     }
