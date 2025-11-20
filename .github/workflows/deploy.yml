@@ -17,38 +17,51 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    outputs:
-      target_env: ${{ steps.setenv.outputs.ENVIRONMENT }}
-
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Skip on PR
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          echo "Pull request detected. Skipping deployment."
-          exit 0
-
+      # ─────────────────────────────────────────────
+      # Determine target environment
+      # feature/* → dev
+      # dev → uat
+      # uat → prod
+      # prod → blocked
+      # ─────────────────────────────────────────────
       - name: Determine environment
-        id: setenv
+        id: env
         run: |
           BRANCH="${GITHUB_REF##*/}"
 
           if [[ "$BRANCH" == feature/* ]]; then ENV="dev"; fi
           if [[ "$BRANCH" == dev ]]; then ENV="uat"; fi
           if [[ "$BRANCH" == uat ]]; then ENV="prod"; fi
+
           if [[ "$BRANCH" == prod ]]; then
-            echo "Prod cannot deploy forward."
+            echo "Cannot deploy forward from prod."
             exit 1
           fi
 
-          echo "ENVIRONMENT=$ENV"
-          echo "ENVIRONMENT=$ENV" >> $GITHUB_OUTPUT
+          echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
+          echo "Target environment → $ENV"
+      
+      # ─────────────────────────────────────────────
+      # PR builds never deploy (secrets not exposed)
+      # ─────────────────────────────────────────────
+      - name: Skip on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "PR detected → skipping deployment."
+          exit 0
 
-      - name: Set environment for secrets
-        run: echo "ENVIRONMENT=${{ steps.setenv.outputs.ENVIRONMENT }}" >> $GITHUB_ENV
+      # ─────────────────────────────────────────────
+      # Attach real deployment environment ONLY on push
+      # (This is where secrets are taken from)
+      # ─────────────────────────────────────────────
+    environment:
+      name: ${{ env.ENVIRONMENT }}
 
+    steps:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -58,6 +71,9 @@ jobs:
         run: |
           pip install databricks-cli requests
 
+      # ─────────────────────────────────────────────
+      # Safety check to avoid silent empty secrets
+      # ─────────────────────────────────────────────
       - name: Validate secrets
         run: |
           if [ -z "${{ secrets.DATABRICKS_HOST }}" ] || [ -z "${{ secrets.DATABRICKS_TOKEN }}" ]; then
@@ -65,6 +81,9 @@ jobs:
             exit 1
           fi
 
+      # ─────────────────────────────────────────────
+      # Actual deployment
+      # ─────────────────────────────────────────────
       - name: Deploy to Databricks
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
