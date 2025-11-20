@@ -3,11 +3,10 @@ name: Deploy Databricks Workflows
 on:
   push:
     branches:
-      - 'feature/*'
+      - feature/*
       - dev
       - uat
       - prod
-
   pull_request:
     types:
       - opened
