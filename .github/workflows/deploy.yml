@@ -14,22 +14,15 @@ on:
       - prod
 
 jobs:
-  deploy:
+  decide-env:
     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+    outputs:
+      target_env: ${{ steps.setenv.outputs.target_env }}
 
-      # ─────────────────────────────────────────────
-      # Determine target environment
-      # feature/* → dev
-      # dev → uat
-      # uat → prod
-      # prod → blocked
-      # ─────────────────────────────────────────────
-      - name: Determine environment
-        id: env
+    steps:
+      - name: Detect target env
+        id: setenv
         run: |
           BRANCH="${GITHUB_REF##*/}"
 
@@ -38,53 +31,46 @@ jobs:
           if [[ "$BRANCH" == uat ]]; then ENV="prod"; fi
 
           if [[ "$BRANCH" == prod ]]; then
-            echo "Cannot deploy forward from prod."
+            echo "Prod cannot deploy forward."
             exit 1
           fi
 
-          echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
-          echo "Target environment → $ENV"
-      
-      # ─────────────────────────────────────────────
-      # PR builds never deploy (secrets not exposed)
-      # ─────────────────────────────────────────────
+          echo "target_env=$ENV" >> $GITHUB_OUTPUT
+          echo "Environment resolved → $ENV"
+
       - name: Skip on PR
         if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          echo "PR detected → skipping deployment."
-          exit 0
+        run: echo "PR detected. Deployment skipped."
 
-      # ─────────────────────────────────────────────
-      # Attach real deployment environment ONLY on push
-      # (This is where secrets are taken from)
-      # ─────────────────────────────────────────────
-    environment:
-      name: ${{ env.ENVIRONMENT }}
+  deploy:
+    needs: decide-env
+    if: ${{ github.event_name == 'push' }}
+
+    # Here dynamic mapping works because the output is known before entering this job
+    environment: ${{ needs.decide-env.outputs.target_env }}
+
+    runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
       - name: Install dependencies
-        run: |
-          pip install databricks-cli requests
+        run: pip install databricks-cli requests
 
-      # ─────────────────────────────────────────────
-      # Safety check to avoid silent empty secrets
-      # ─────────────────────────────────────────────
       - name: Validate secrets
         run: |
           if [ -z "${{ secrets.DATABRICKS_HOST }}" ] || [ -z "${{ secrets.DATABRICKS_TOKEN }}" ]; then
-            echo "ERROR: Missing Databricks secrets."
+            echo "ERROR: Missing secrets!"
             exit 1
           fi
 
-      # ─────────────────────────────────────────────
-      # Actual deployment
-      # ─────────────────────────────────────────────
-      - name: Deploy to Databricks
+      - name: Deploy
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
