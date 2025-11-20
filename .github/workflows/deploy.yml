@@ -7,6 +7,7 @@ on:
       - dev
       - uat
       - prod
+
   pull_request:
     branches:
       - dev
@@ -14,48 +15,46 @@ on:
       - prod
 
 jobs:
-  decide-env:
-    runs-on: ubuntu-latest
-
-    outputs:
-      target_env: ${{ steps.setenv.outputs.target_env }}
-
-    steps:
-      - name: Detect target env
-        id: setenv
-        run: |
-          BRANCH="${GITHUB_REF##*/}"
-
-          if [[ "$BRANCH" == feature/* ]]; then ENV="dev"; fi
-          if [[ "$BRANCH" == dev ]]; then ENV="uat"; fi
-          if [[ "$BRANCH" == uat ]]; then ENV="prod"; fi
-
-          if [[ "$BRANCH" == prod ]]; then
-            echo "Prod cannot deploy forward."
-            exit 1
-          fi
-
-          echo "target_env=$ENV" >> $GITHUB_OUTPUT
-          echo "Environment resolved → $ENV"
-
-      - name: Skip on PR
-        if: ${{ github.event_name == 'pull_request' }}
-        run: echo "PR detected. Deployment skipped."
-
   deploy:
-    needs: decide-env
-    if: ${{ github.event_name == 'push' }}
-
-    # Here dynamic mapping works because the output is known before entering this job
-    environment: ${{ needs.decide-env.outputs.target_env }}
-
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Detect target environment
+        id: setenv
+        run: |
+          BRANCH="${GITHUB_REF##*/}"
+          if [[ "$BRANCH" == feature/* ]]; then ENV="dev"; fi
+          if [[ "$BRANCH" == "dev" ]]; then ENV="uat"; fi
+          if [[ "$BRANCH" == "uat" ]]; then ENV="prod"; fi
+          if [[ "$BRANCH" == "prod" ]]; then
+            echo "Cannot deploy from prod."
+            exit 1
+          fi
+          echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
+          echo "ENVIRONMENT=$ENV" >> $GITHUB_OUTPUT
+
+      - name: Set environment dynamically
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.setOutput("envName", process.env.ENVIRONMENT)
+
+    environment:
+      name: ${{ steps.setenv.outputs.ENVIRONMENT }}
+
+    steps:
+
+      - name: Stop on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "Pull request – skipping deployment."
+          exit 0
+
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
@@ -63,10 +62,10 @@ jobs:
       - name: Install dependencies
         run: pip install databricks-cli requests
 
-      - name: Validate secrets
+      - name: Validate Secrets
         run: |
           if [ -z "${{ secrets.DATABRICKS_HOST }}" ] || [ -z "${{ secrets.DATABRICKS_TOKEN }}" ]; then
-            echo "ERROR: Missing secrets!"
+            echo "Missing secrets."
             exit 1
           fi
 
