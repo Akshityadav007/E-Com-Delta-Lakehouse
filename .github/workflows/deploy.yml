@@ -26,14 +26,15 @@ jobs:
       - name: Detect target environment
         id: determine
         run: |
-          REF="$GITHUB_REF_NAME"
+          REF="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           echo "Branch name = $REF"
 
           if [[ "$REF" == feature/* ]]; then ENV="dev"; fi
           if [[ "$REF" == "dev" ]]; then ENV="uat"; fi
           if [[ "$REF" == "uat" ]]; then ENV="prod"; fi
-          if [[ "$REF" == "prod" ]]; then
-            echo "Cannot deploy from prod."
+
+          if [[ -z "$ENV" ]]; then
+            echo "ERROR: Could not determine environment!"
             exit 1
           fi
 
