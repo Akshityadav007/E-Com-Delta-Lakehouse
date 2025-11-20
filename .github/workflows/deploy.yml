@@ -3,7 +3,7 @@ name: Deploy Databricks Workflows
 on:
   push:
     branches:
-      - feature/*
+      - 'feature/*'
       - dev
       - uat
       - prod
@@ -21,35 +21,63 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    # Environment protection gates
+    # Environment protection gates (dev / uat / prod)
     environment:
-      name: ${{ github.ref_name }}   # dev / uat / prod
-      url: https://example.com       # optional
+      name: ${{ github.ref_name }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Detect branch
+        id: detectbranch
+        run: |
+          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
+          echo "Branch detected: ${GITHUB_REF##*/}"
+
+      ###########################################################
+      # Skip Deployment on Pull Requests (NO SECRETS AVAILABLE)
+      ###########################################################
+      - name: Skip deploy on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "Pull Request detected → skipping deployment."
+          exit 0
+
+      ###################################
+      # Set up Python on push events
+      ###################################
       - name: Set up Python
+        if: ${{ github.event_name == 'push' }}
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
       - name: Install dependencies
+        if: ${{ github.event_name == 'push' }}
         run: |
           pip install databricks-cli requests
 
-      - name: Select Environment
-        id: envselect
+      #########################################################
+      # Hard Fail if Secrets Missing (for safety)
+      #########################################################
+      - name: Validate Secrets
+        if: ${{ github.event_name == 'push' }}
         run: |
-          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
+          if [ -z "${{ secrets.DATABRICKS_HOST }}" ] || [ -z "${{ secrets.DATABRICKS_TOKEN }}" ]; then
+            echo "ERROR: Missing Databricks secrets!"
+            exit 1
+          fi
 
-      - name: Deploy to target workspace
+      #########################################################
+      # Deployment
+      #########################################################
+      - name: Deploy to Databricks Workspace
+        if: ${{ github.event_name == 'push' }}
         env:
-          BRANCH: ${{ env.BRANCH }}
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         run: |
-          echo "Deploying to $BRANCH workspace..."
+          echo "Deploying to ${{ env.BRANCH }} workspace..."
           python ci-cd/deploy.py "$DATABRICKS_HOST" "$DATABRICKS_TOKEN"
-          echo "Deployment to $BRANCH workspace completed."
+          echo "Deployment to ${{ env.BRANCH }} workspace completed."
