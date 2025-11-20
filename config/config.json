@@ -1,6 +1,6 @@
 {
   "project": "ecommerce-deltalake",
-  "version": 1.1,
+  "version": 1,
 
   "paths": {
     "bronze": "dbfs:/mnt/ecom/bronze",
