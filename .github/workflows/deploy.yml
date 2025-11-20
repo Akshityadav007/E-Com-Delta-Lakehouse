@@ -3,9 +3,11 @@ name: Deploy Databricks Workflows
 on:
   push:
     branches:
+      - feature/*
       - dev
       - uat
       - prod
+
   pull_request:
     branches:
       - dev
@@ -13,26 +15,69 @@ on:
       - prod
 
 jobs:
+
+  decide-env:
+    runs-on: ubuntu-latest
+
+    outputs:
+      target_env: ${{ steps.determine.outputs.ENVIRONMENT }}
+
+    steps:
+      - name: Detect target environment
+        id: determine
+        run: |
+          REF="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          echo "Branch name = $REF"
+
+          if [[ "$REF" == feature/* ]]; then ENV="dev"; fi
+          if [[ "$REF" == "dev" ]]; then ENV="uat"; fi
+          if [[ "$REF" == "uat" ]]; then ENV="prod"; fi
+
+          if [[ -z "$ENV" ]]; then
+            echo "ERROR: Could not determine environment!"
+            exit 1
+          fi
+
+          echo "ENVIRONMENT=$ENV" >> $GITHUB_OUTPUT
+          echo "Selected environment = $ENV"
+
   deploy:
+    needs: decide-env
     runs-on: ubuntu-latest
 
     environment:
-      name: ${{ github.ref_name }}
-      url: https://<workspace-url>
+      name: ${{ needs.decide-env.outputs.target_env }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Skip on PR (secrets unavailable)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "Pull request detected → skipping deployment."
+          exit 0
+
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
-      - name: Install deps
-        run: |
-          pip install databricks-cli requests
+      - name: Install dependencies
+        run: pip install databricks-cli requests
 
-      - name: Deploy workflows
+      - name: Validate Secrets
         run: |
-          python deploy.py "${{ secrets.DATABRICKS_HOST }}" "${{ secrets.DATABRICKS_TOKEN }}"
+          if [ -z "${{ secrets.DATABRICKS_HOST }}" ] || [ -z "${{ secrets.DATABRICKS_TOKEN }}" ]; then
+            echo "ERROR: Missing secrets for environment!"
+            exit 1
+          fi
+
+      - name: Deploy to Databricks
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          echo "Deploying to ${{ needs.decide-env.outputs.target_env }}..."
+          python ci-cd/deploy.py "$DATABRICKS_HOST" "$DATABRICKS_TOKEN"
+          echo "Deployment complete."
