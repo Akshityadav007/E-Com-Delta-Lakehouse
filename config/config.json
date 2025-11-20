@@ -1,4 +1,20 @@
 {
-  "version": 1,
-  "pipeline_name": "ecommerce_pipeline"
+  "project": "ecommerce-deltalake",
+  "version": 1.4,
+
+  "paths": {
+    "bronze": "dbfs:/mnt/ecom/bronze",
+    "silver": "dbfs:/mnt/ecom/silver",
+    "gold":   "dbfs:/mnt/ecom/gold"
+  },
+
+  "checkpoints": {
+    "orders": "dbfs:/mnt/ecom/checkpoints/orders",
+    "customers": "dbfs:/mnt/ecom/checkpoints/customers"
+  },
+
+  "tables": {
+    "orders": "ecommerce.orders_bronze",
+    "customers": "ecommerce.customers_bronze"
+  }
 }
