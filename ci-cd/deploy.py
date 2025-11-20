@@ -1,7 +1,6 @@
 import json
 import sys
-from databricks_cli.sdk.api_client import ApiClient
-from databricks_cli.jobs.api import JobsApi
+import requests
 
 
 def load_config():
@@ -10,15 +9,14 @@ def load_config():
 
 
 def build_job_definition(wf):
-    """
-    Build job payload (same for create and reset)
-    """
     return {
         "name": wf["name"],
         "tasks": [
             {
                 "task_key": "main",
-                "notebook_task": {"notebook_path": wf["notebook"]},
+                "notebook_task": {
+                    "notebook_path": wf["notebook"]
+                },
                 "job_cluster_key": "job_cluster"
             }
         ],
@@ -35,30 +33,44 @@ def build_job_definition(wf):
     }
 
 
-def deploy(api_client, workflows):
-    jobs_api = JobsApi(api_client)
+def api_call(host, token, method, path, payload=None):
+    url = f"{host}/api/2.1{path}"
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-    existing_jobs = {
-        job["settings"]["name"]: job
-        for job in jobs_api.list_jobs().get("jobs", [])
-    }
+    resp = requests.request(method, url, headers=headers, json=payload)
+
+    if resp.status_code >= 300:
+        raise Exception(f"API Error {resp.status_code}: {resp.text}")
+
+    return resp.json() if resp.text else {}
+
+
+def deploy(host, token, workflows):
+    # 1. List all jobs
+    existing_jobs = api_call(host, token, "GET", "/jobs/list").get("jobs", [])
+    existing = {job["settings"]["name"]: job for job in existing_jobs}
 
     for wf in workflows:
         name = wf["name"]
         update = wf.get("update", True)
+
         payload = build_job_definition(wf)
 
-        # CREATE
-        if name not in existing_jobs:
-            jobs_api.create_job(payload)
+        if name not in existing:
+            # CREATE job
+            api_call(host, token, "POST", "/jobs/create", payload)
             print(f"[CREATED] {name}")
             continue
 
-        # UPDATE
+        # UPDATE job
         if update:
-            jobs_api.reset_job(
-                existing_jobs[name]["job_id"],
-                {"new_settings": payload}  
+            job_id = existing[name]["job_id"]
+            api_call(
+                host,
+                token,
+                "POST",
+                "/jobs/reset",
+                {"job_id": job_id, "new_settings": payload}
             )
             print(f"[UPDATED] {name}")
         else:
@@ -69,9 +81,7 @@ if __name__ == "__main__":
     config = load_config()
     workflows = config["workflows"]
 
-    api_client = ApiClient(
-        host=sys.argv[1],
-        token=sys.argv[2]
-    )
+    host = sys.argv[1]
+    token = sys.argv[2]
 
-    deploy(api_client, workflows)
+    deploy(host, token, workflows)
