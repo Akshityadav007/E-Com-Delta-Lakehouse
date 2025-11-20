@@ -17,21 +17,20 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    # Map branch → GitHub Environment
-    environment: ${{ startsWith(github.ref_name, 'feature/') && 'dev' || github.ref_name == 'dev' && 'uat' || github.ref_name == 'uat' && 'prod' || github.ref_name == 'prod' && 'prod' }}
+    outputs:
+      target_env: ${{ steps.setenv.outputs.ENVIRONMENT }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Skip deploy on PR (secrets unavailable on PR)
       - name: Skip on PR
         if: ${{ github.event_name == 'pull_request' }}
         run: |
-          echo "Pull Request detected. Skipping deployment."
+          echo "Pull request detected. Skipping deployment."
           exit 0
 
-      - name: Set target environment
+      - name: Determine environment
         id: setenv
         run: |
           BRANCH="${GITHUB_REF##*/}"
@@ -40,12 +39,15 @@ jobs:
           if [[ "$BRANCH" == dev ]]; then ENV="uat"; fi
           if [[ "$BRANCH" == uat ]]; then ENV="prod"; fi
           if [[ "$BRANCH" == prod ]]; then
-            echo "Error: Prod cannot deploy forward."
+            echo "Prod cannot deploy forward."
             exit 1
           fi
 
-          echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
-          echo "Selected environment: $ENV"
+          echo "ENVIRONMENT=$ENV"
+          echo "ENVIRONMENT=$ENV" >> $GITHUB_OUTPUT
+
+      - name: Set environment for secrets
+        run: echo "ENVIRONMENT=${{ steps.setenv.outputs.ENVIRONMENT }}" >> $GITHUB_ENV
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -56,20 +58,16 @@ jobs:
         run: |
           pip install databricks-cli requests
 
-      - name: Validate Secrets
+      - name: Validate secrets
         run: |
-          if [ -z "${{ secrets.DATABRICKS_HOST }}" ] || \
-             [ -z "${{ secrets.DATABRICKS_TOKEN }}" ]; then
-            echo "ERROR: Databricks secrets missing for this environment."
+          if [ -z "${{ secrets.DATABRICKS_HOST }}" ] || [ -z "${{ secrets.DATABRICKS_TOKEN }}" ]; then
+            echo "ERROR: Missing Databricks secrets."
             exit 1
           fi
-          echo "Secrets validated."
 
       - name: Deploy to Databricks
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         run: |
-          echo "Deploying using ENVIRONMENT=${{ env.ENVIRONMENT }}..."
           python ci-cd/deploy.py "$DATABRICKS_HOST" "$DATABRICKS_TOKEN"
-          echo "Deployment completed."
