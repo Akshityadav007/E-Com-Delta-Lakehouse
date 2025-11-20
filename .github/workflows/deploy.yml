@@ -17,7 +17,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    # Use real environment (dev/uat/prod), not branch name
+    # Map branch → GitHub Environment
     environment: ${{ 
         startsWith(github.ref_name, 'feature/') && 'dev' ||
         github.ref_name == 'dev' && 'uat' ||
@@ -29,22 +29,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Skip deploy on PR (secrets not available)
+      # Skip deploy on PR (secrets unavailable on PR)
       - name: Skip on PR
         if: ${{ github.event_name == 'pull_request' }}
         run: |
-          echo "PR build → skipping deployment."
+          echo "Pull Request detected. Skipping deployment."
           exit 0
 
       - name: Set target environment
         id: setenv
         run: |
           BRANCH="${GITHUB_REF##*/}"
+
           if [[ "$BRANCH" == feature/* ]]; then ENV="dev"; fi
           if [[ "$BRANCH" == dev ]]; then ENV="uat"; fi
           if [[ "$BRANCH" == uat ]]; then ENV="prod"; fi
           if [[ "$BRANCH" == prod ]]; then
-            echo "Prod cannot deploy forward."
+            echo "Error: Prod cannot deploy forward."
             exit 1
           fi
 
@@ -56,13 +57,24 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           pip install databricks-cli requests
 
-      - name: Deploy
+      - name: Validate Secrets
+        run: |
+          if [ -z "${{ secrets.DATABRICKS_HOST }}" ] || \
+             [ -z "${{ secrets.DATABRICKS_TOKEN }}" ]; then
+            echo "ERROR: Databricks secrets missing for this environment."
+            exit 1
+          fi
+          echo "Secrets validated."
+
+      - name: Deploy to Databricks
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         run: |
+          echo "Deploying using ENVIRONMENT=${{ env.ENVIRONMENT }}..."
           python ci-cd/deploy.py "$DATABRICKS_HOST" "$DATABRICKS_TOKEN"
+          echo "Deployment completed."
