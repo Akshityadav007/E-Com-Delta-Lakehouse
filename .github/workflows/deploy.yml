@@ -16,12 +16,13 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    # Environment protection gates
     environment:
-      name: ${{ github.ref_name }}
-      url: https://<workspace-url>
+      name: ${{ github.ref_name }}   # dev / uat / prod
+      url: https://example.com       # optional
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -29,10 +30,21 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           pip install databricks-cli requests
 
-      - name: Deploy workflows
+      - name: Select Environment
+        id: envselect
         run: |
-          python ci-cd/deploy.py "${{ secrets.DATABRICKS_HOST }}" "${{ secrets.DATABRICKS_TOKEN }}"
+          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
+
+      - name: Deploy to target workspace
+        env:
+          BRANCH: ${{ env.BRANCH }}
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          echo "Deploying to $BRANCH workspace..."
+          python ci-cd/deploy.py "$DATABRICKS_HOST" "$DATABRICKS_TOKEN"
+          echo "Deployment to $BRANCH workspace completed."
