@@ -7,6 +7,7 @@ on:
       - dev
       - uat
       - prod
+
   pull_request:
     branches:
       - dev
@@ -19,42 +20,41 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      target_env: ${{ steps.setenv.outputs.target_env }}
+      target_env: ${{ steps.determine.outputs.ENVIRONMENT }}
 
     steps:
-      - name: Determine target environment
-        id: setenv
+      - name: Detect target environment
+        id: determine
         run: |
-          BRANCH="${GITHUB_REF_NAME}"
+          REF="$GITHUB_REF_NAME"
+          echo "Branch name = $REF"
 
-          if [[ "$BRANCH" == feature/* ]]; then ENV="dev"; fi
-          if [[ "$BRANCH" == "dev" ]]; then ENV="uat"; fi
-          if [[ "$BRANCH" == "uat" ]]; then ENV="prod"; fi
-
-          if [[ "$BRANCH" == "prod" ]]; then
-            echo "Cannot deploy forward from prod."
+          if [[ "$REF" == feature/* ]]; then ENV="dev"; fi
+          if [[ "$REF" == "dev" ]]; then ENV="uat"; fi
+          if [[ "$REF" == "uat" ]]; then ENV="prod"; fi
+          if [[ "$REF" == "prod" ]]; then
+            echo "Cannot deploy from prod."
             exit 1
           fi
 
-          echo "target_env=$ENV" >> $GITHUB_OUTPUT
-          echo "Resolved environment → $ENV"
-  
+          echo "ENVIRONMENT=$ENV" >> $GITHUB_OUTPUT
+          echo "Selected environment = $ENV"
+
   deploy:
-    runs-on: ubuntu-latest
     needs: decide-env
+    runs-on: ubuntu-latest
 
     environment:
       name: ${{ needs.decide-env.outputs.target_env }}
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Stop deployment for PR
+      - name: Skip on PR (secrets unavailable)
         if: ${{ github.event_name == 'pull_request' }}
         run: |
-          echo "Pull request — skipping deployment."
+          echo "Pull request detected → skipping deployment."
           exit 0
 
       - name: Setup Python
@@ -68,7 +68,7 @@ jobs:
       - name: Validate Secrets
         run: |
           if [ -z "${{ secrets.DATABRICKS_HOST }}" ] || [ -z "${{ secrets.DATABRICKS_TOKEN }}" ]; then
-            echo "ERROR: Missing secrets!"
+            echo "ERROR: Missing secrets for environment!"
             exit 1
           fi
 
@@ -77,5 +77,6 @@ jobs:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         run: |
+          echo "Deploying to ${{ needs.decide-env.outputs.target_env }}..."
           python ci-cd/deploy.py "$DATABRICKS_HOST" "$DATABRICKS_TOKEN"
-          echo "Deployment to ${{ needs.decide-env.outputs.target_env }} completed."
+          echo "Deployment complete."
